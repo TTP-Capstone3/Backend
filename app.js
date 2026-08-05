@@ -13,7 +13,7 @@ const cookieParser = require('cookie-parser');
 const { rateLimit } = require('express-rate-limit');
 
 const { db } = require('./models'); // the database connection
-const { taskRouter, authRouter } = require('./routes'); // our routers
+const { authRouter } = require('./routes'); // our routers
 const { requireAuth } = require('./middleware/auth'); // accepts our JWT or Auth0's
 
 const app = express();
