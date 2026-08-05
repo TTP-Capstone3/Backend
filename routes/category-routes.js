@@ -98,7 +98,7 @@ router.post('/', async (req, res, next) => {
 
 // ---------------------------------------------------------
 // PATCH /api/categories/:id
-// Update the name or color of a category.
+// Update the name of a category.
 // ---------------------------------------------------------
 router.patch('/:id', async (req, res, next) => {
   try {
