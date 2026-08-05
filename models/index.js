@@ -15,29 +15,49 @@ const Category = require("./category");
 // A user can create many categories 
 // deleting a user should also delete their created categories.
 User.hasMany(Category, {
-  foreignKey: "userId",
+  foreignKey: {
+    name: 'userId',
+    allowNull: false, // A category should always have a user attached.
+  },
   onDelete: "CASCADE"
 })
 Category.belongsTo(User, {
-  foreignKey: "userId"
+  foreignKey: {
+    name: 'userId',
+    allowNull: false, // A category should always have a user attached.
+  },
 })
 
 // A user can have many schedule items 
 User.hasMany(ScheduleItem, {
-  foreignKey: "userId",
+  foreignKey: {
+    name: 'userId',
+    allowNull: false,   // An item should always have a userId attached.
+  },
   onDelete: "CASCADE",
 })
 ScheduleItem.belongsTo(User, {
-  foreignKey: "userId",
+  foreignKey: {
+    name: 'userId',
+    allowNull: false,   // An item should always have a userId attached.
+  },
+  onDelete: 'CASCADE',
 })
 
 // A category can be added to many schedule items which makes filtering and sorting easier.
 Category.hasMany(ScheduleItem, {
-  foreignKey: "categoryId",
+  foreignKey: {
+    name: 'categoryId',
+    allowNull: true,    // An item might not have a category even though it can sometimes be 'none'
+  },
   onDelete: "SET NULL"
 })
 ScheduleItem.belongsTo(Category, {
-  foreignKey: "categoryId",
+  foreignKey: {
+    name: 'categoryId',
+    allowNull: true,    // An item might not have a category even though it can sometimes be 'none'
+  },
+  onDelete: 'SET NULL',
 })
 
 module.exports = {
