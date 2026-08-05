@@ -18,7 +18,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 // ---------------------------------------------------------
-// GET /api/categories
+// GET /categories
 // Return every category owned by the current user.
 // ---------------------------------------------------------
 router.get('/', async (req, res, next) => {
@@ -37,7 +37,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // ---------------------------------------------------------
-// GET /api/categories/:id
+// GET /categories/:id
 // Return one category owned by the current user.
 // ---------------------------------------------------------
 router.get('/:id', async (req, res, next) => {
@@ -60,7 +60,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // ---------------------------------------------------------
-// POST /api/categories
+// POST /categories
 // Create a category for the current user.
 // ---------------------------------------------------------
 router.post('/', async (req, res, next) => {
@@ -97,7 +97,7 @@ router.post('/', async (req, res, next) => {
 });
 
 // ---------------------------------------------------------
-// PATCH /api/categories/:id
+// PATCH /categories/:id
 // Update the name of a category.
 // ---------------------------------------------------------
 router.patch('/:id', async (req, res, next) => {
@@ -144,7 +144,7 @@ router.patch('/:id', async (req, res, next) => {
 });
 
 // ---------------------------------------------------------
-// DELETE /api/categories/:id
+// DELETE /categories/:id
 // Delete a category owned by the current user.
 //
 // Schedule items are not deleted. Their categoryId becomes null
