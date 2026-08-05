@@ -2,8 +2,9 @@
 // Lets the rest of the app grab them from here: const { Task } = require('./models')
 
 const db = require('../db');
-const Task = require('./task.model');
-const User = require('./user.model');
+const User = require('./user');
+const ScheduleItem = require("./scheduleItem");
+const Category = require("./category");
 
 // ---------- associations ----------
 // Describe how tables relate here. When you're ready to tie tasks to their
@@ -11,8 +12,57 @@ const User = require('./user.model');
 //   User.hasMany(Task)     // one user has many tasks
 //   Task.belongsTo(User)   // each task belongs to one user (adds a userId column)
 
+// A user can create many categories 
+// deleting a user should also delete their created categories.
+User.hasMany(Category, {
+  foreignKey: {
+    name: 'userId',
+    allowNull: false, // A category should always have a user attached.
+  },
+  onDelete: "CASCADE"
+})
+Category.belongsTo(User, {
+  foreignKey: {
+    name: 'userId',
+    allowNull: false, // A category should always have a user attached.
+  },
+})
+
+// A user can have many schedule items 
+User.hasMany(ScheduleItem, {
+  foreignKey: {
+    name: 'userId',
+    allowNull: false,   // An item should always have a userId attached.
+  },
+  onDelete: "CASCADE",
+})
+ScheduleItem.belongsTo(User, {
+  foreignKey: {
+    name: 'userId',
+    allowNull: false,   // An item should always have a userId attached.
+  },
+  onDelete: 'CASCADE',
+})
+
+// A category can be added to many schedule items which makes filtering and sorting easier.
+Category.hasMany(ScheduleItem, {
+  foreignKey: {
+    name: 'categoryId',
+    allowNull: true,    // An item might not have a category even though it can sometimes be 'none'
+  },
+  onDelete: "SET NULL"
+})
+ScheduleItem.belongsTo(Category, {
+  foreignKey: {
+    name: 'categoryId',
+    allowNull: true,    // An item might not have a category even though it can sometimes be 'none'
+  },
+  onDelete: 'SET NULL',
+})
+
 module.exports = {
   db, // exported too so seed.js can sync from one place
-  Task,
   User,
+  ScheduleItem,
+  Category,
 };
