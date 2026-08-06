@@ -13,7 +13,7 @@ const cookieParser = require('cookie-parser');
 const { rateLimit } = require('express-rate-limit');
 
 const { db } = require('./models'); // the database connection
-const { authRouter, scheduleItemRouter, categoryRouter } = require('./routes'); // our routers
+const { authRouter, scheduleItemRouter, categoryRouter, calendarRouter } = require('./routes'); // our routers
 const { requireAuth } = require('./middleware/auth'); // accepts our JWT or Auth0's
 
 const app = express();
@@ -94,7 +94,8 @@ app.get('/api/protected', requireAuth, (req, res) => {
 // This router applies the right guard to each route, so we just mount it here.
 app.use('/auth', authRouter);
 app.use('/schedule-items', scheduleItemRouter);
-app.use('/categories', categoryRouter)
+app.use('/categories', categoryRouter);
+app.use('/calendar', calendarRouter);
 
 // ---------- 404 ----------
 // Nothing above matched, so the thing doesn't exist. Send a clear JSON 404.
