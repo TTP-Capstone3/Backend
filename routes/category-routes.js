@@ -17,6 +17,18 @@ const router = express.Router();
 // After this middleware runs, req.user contains the User model instance.
 router.use(requireAuth);
 
+const DEFAULT_CATEGORY_COLOR = '#949494';
+const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+
+// Helper function to normalize category colors.
+function normalizeCategoryColor(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const color = value.trim().toUpperCase();
+  return HEX_COLOR_PATTERN.test(color) ? color : null;
+}
+
 // ---------------------------------------------------------
 // GET /categories
 // Return every category owned by the current user.
@@ -66,9 +78,16 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const name = req.body.name?.trim();
-
     if (!name) {
       return res.status(400).json({error: 'Category name is required.'});
+    }
+
+    let color = DEFAULT_CATEGORY_COLOR;
+    if ('color' in req.body) {
+      color = normalizeCategoryColor(req.body.color);
+      if (!color) {
+        return res.status(400).json({error: 'Category color must use the format #RRGGBB.'});
+      }
     }
 
     // Prevent one user from creating both "School" and "school".
@@ -87,6 +106,7 @@ router.post('/', async (req, res, next) => {
 
     const category = await Category.create({
       name,
+      color,
       userId: req.user.id,
     });
 
@@ -133,6 +153,15 @@ router.patch('/:id', async (req, res, next) => {
       }
 
       updates.name = name;
+    }
+
+    if ('color' in req.body) {
+      const color = normalizeCategoryColor(req.body.color);
+      if (!color) {
+        return res.status(400).json({ error: 'Category color must use the format #RRGGBB.'});
+      }
+
+      updates.color = color;
     }
 
     await category.update(updates);
