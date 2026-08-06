@@ -1,31 +1,28 @@
-// Pure functions for checking schedule conflicts, no DB calls here.
-
-const toDate = (value) => (value instanceof Date ? value : new Date(value));
-
-const rangesOverlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
-
-// Returns any items that overlap the candidate's start/end time.
-const findConflicts = (items, candidate, { excludeId } = {}) => {
+function findConflicts(items, candidate, excludeId) {
   if (!candidate.startAt || !candidate.endAt) return [];
-  const start = toDate(candidate.startAt);
-  const end = toDate(candidate.endAt);
+
+  const start = new Date(candidate.startAt);
+  const end = new Date(candidate.endAt);
 
   return items.filter((item) => {
     if (excludeId && item.id === excludeId) return false;
     if (!item.startAt || !item.endAt) return false;
-    return rangesOverlap(start, end, toDate(item.startAt), toDate(item.endAt));
-  });
-};
 
-// Finds open gaps in a time range that are long enough to fit a new item.
-const findFreeSlots = (items, { rangeStart, rangeEnd, durationMinutes }) => {
-  const start = toDate(rangeStart);
-  const end = toDate(rangeEnd);
+    const itemStart = new Date(item.startAt);
+    const itemEnd = new Date(item.endAt);
+
+    return start < itemEnd && itemStart < end;
+  });
+}
+
+function findFreeSlots(items, rangeStart, rangeEnd, durationMinutes) {
+  const start = new Date(rangeStart);
+  const end = new Date(rangeEnd);
   const durationMs = durationMinutes * 60 * 1000;
 
   const busy = items
     .filter((item) => item.startAt && item.endAt)
-    .map((item) => ({ start: toDate(item.startAt), end: toDate(item.endAt) }))
+    .map((item) => ({ start: new Date(item.startAt), end: new Date(item.endAt) }))
     .filter((item) => item.end > start && item.start < end)
     .sort((a, b) => a.start - b.start);
 
@@ -36,14 +33,16 @@ const findFreeSlots = (items, { rangeStart, rangeEnd, durationMinutes }) => {
     if (item.start - cursor >= durationMs) {
       slots.push({ start: cursor, end: item.start });
     }
-    if (item.end > cursor) cursor = item.end;
+    if (item.end > cursor) {
+      cursor = item.end;
+    }
   }
 
   if (end - cursor >= durationMs) {
-    slots.push({ start: cursor, end });
+    slots.push({ start: cursor, end: end });
   }
 
   return slots;
-};
+}
 
 module.exports = { findConflicts, findFreeSlots };
