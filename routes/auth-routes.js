@@ -231,24 +231,13 @@ router.post('/auth0', jwtCheck, async (req, res, next) => {
 
       const username = await uniqueUsername(req.body.username || name || email?.split('@')[0]);
       user = await User.create({ auth0Id, username, email, name });
-      sendTokenCookie(res, user)
       // Change status code since we are now creating a new user.
       status = 201
     }
 
-    // Already synced? Nothing to create — hand back the row we have.
-    const existing = await User.findOne({ where: { auth0Id } });
-    if (existing) return res.json(existing); // 200 = already existed
-
-    // First social login for this person. The username is app-specific, so the
-    // frontend suggests one — but we're the ones who have to make it fit our
-    // table's rules, hence uniqueUsername().
-    // passwordHash is intentionally absent — Auth0 owns this user's credential.
-    const username = await uniqueUsername(req.body.username || name || email?.split('@')[0]);
-    user = await User.create({ auth0Id, username, email, name });
-
+    // Give both new and returning Auth0 users our application JWT cookie.
     sendTokenCookie(res, user)
-    return res.status(201).json(user); // 201 = Created
+    return res.status(status).json(user); // 201 = Created
   } catch (err) {
     handleDbError(err, res, next);
   }
