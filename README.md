@@ -16,7 +16,12 @@ across the two — they're called out where they come up below.
 
 ## Getting started
 
+Use Node 24 for local development. If you use `nvm`, the checked-in `.nvmrc`
+selects it for you; Node 22.1 or newer within the Node 22 release line is also
+supported.
+
 ```bash
+nvm use                    # optional if Node 24 is already active
 npm install
 createdb capstone_dev      # once — must match LOCAL_DATABASE_NAME in db/index.js
 cp .env.example .env       # then fill in the values below
