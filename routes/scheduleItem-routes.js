@@ -6,10 +6,12 @@
 // DELETE /schedule-items/:id
 
 const express = require('express');
+const { Op } = require('sequelize');
 const { ScheduleItem, Category} = require('../models');
 
 const { requireAuth } = require('../middleware/auth');
 const validateScheduleItem = require('../middleware/validateScheduleItem',);
+const { findConflicts } = require('../utils/scheduleConflicts');
 
 const router = express.Router();
 
@@ -155,7 +157,15 @@ router.post('/', async (req, res, next) => {
       include: [{model: Category, required: false}],
     });
 
-    res.status(201).json(createdItem);
+    const otherItems = await ScheduleItem.findAll({
+      where: {
+        userId: req.user.id,
+        id: {[Op.ne]: createdItem.id},
+      },
+    });
+    const conflicts = findConflicts(otherItems, createdItem);
+
+    res.status(201).json({...createdItem.toJSON(), conflicts});
   } catch (error) {
     next(error);
   }
@@ -217,7 +227,15 @@ router.patch('/:id', async (req, res, next) => {
       include: [{model: Category, required: false}],
     });
 
-    res.status(200).json(updatedItem);
+    const otherItems = await ScheduleItem.findAll({
+      where: {
+        userId: req.user.id,
+        id: {[Op.ne]: updatedItem.id},
+      },
+    });
+    const conflicts = findConflicts(otherItems, updatedItem);
+
+    res.status(200).json({...updatedItem.toJSON(), conflicts});
   } catch (error) {
     next(error);
   }
