@@ -243,12 +243,9 @@ router.post('/auth0', jwtCheck, async (req, res, next) => {
     // First social login for this person. The username is app-specific, so the
     // frontend suggests one — but we're the ones who have to make it fit our
     // table's rules, hence uniqueUsername().
-    const username = await uniqueUsername(
-      req.body.username || name || email?.split('@')[0],
-    );
-
     // passwordHash is intentionally absent — Auth0 owns this user's credential.
-    const user = await User.create({ auth0Id, username, email, name });
+    const username = await uniqueUsername(req.body.username || name || email?.split('@')[0]);
+    user = await User.create({ auth0Id, username, email, name });
 
     sendTokenCookie(res, user)
     return res.status(201).json(user); // 201 = Created
