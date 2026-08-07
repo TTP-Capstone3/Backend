@@ -25,8 +25,7 @@ const { User } = require('../models');
 // character, the namespace used in your Auth0 Post-Login Action — see the
 // README. It isn't a secret and it never has to resolve to a real website;
 // it lives in .env only so you can change it without editing code.
-const CLAIMS_NAMESPACE =
-  process.env.AUTH0_CLAIMS_NAMESPACE || 'https://myapp.example.com';
+const CLAIMS_NAMESPACE = process.env.AUTH0_CLAIMS_NAMESPACE || 'https://myapp.example.com';
 
 // ---------- our own JWT settings ----------
 

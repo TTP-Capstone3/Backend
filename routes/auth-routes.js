@@ -168,13 +168,12 @@ router.post('/login', authLimiter, async (req, res, next) => {
     // Deliberately vague, and identical for "no such account" and "wrong
     // password". A precise message like "no account with that email" tells an
     // attacker which emails ARE registered — that's a free list of targets.
-    const invalid = () =>
-      res.status(401).json({ error: 'Invalid email/username or password' });
+    const invalid = () => res.status(401).json({ error: 'Invalid email/username or password' });
 
     if (!user) return invalid();
 
     // An OAuth user has no passwordHash, so there is no password to check.
-    // Point them at the button that actually works for their account.
+    // Point them at the button that actualy works for their account.
     if (!user.passwordHash) {
       return res.status(400).json({
         error: 'This account uses social login — sign in with Auth0 instead.',
@@ -216,21 +215,29 @@ router.post('/auth0', jwtCheck, async (req, res, next) => {
     // token, so we can trust it. A client could put anything in the body.
     const { auth0Id, email, name } = identityFromToken(req);
 
-    // Already synced? Nothing to create — hand back the row we have.
-    const existing = await User.findOne({ where: { auth0Id } });
-    if (existing) return res.json(existing); // 200 = already existed
+    let status = 200
+    let user = await User.findOne({
+      where: { auth0Id },
+    });
 
-    // First social login for this person. The username is app-specific, so the
-    // frontend suggests one — but we're the ones who have to make it fit our
-    // table's rules, hence uniqueUsername().
-    const username = await uniqueUsername(
-      req.body.username || name || email?.split('@')[0],
-    );
+    if (!user) {
+      if (email) {
+        // Edge case where users who already log in using their email try to login using auth0 with the same email.
+        const existingEmailUser = await User.findOne({ where: { email } });
+        if (existingEmailUser) {
+          return res.status(409).json({ error: 'An account with this email already exists. Please use its original login method.' });
+        }
+      }
 
-    // passwordHash is intentionally absent — Auth0 owns this user's credential.
-    const user = await User.create({ auth0Id, username, email, name });
+      const username = await uniqueUsername(req.body.username || name || email?.split('@')[0]);
+      user = await User.create({ auth0Id, username, email, name });
+      // Change status code since we are now creating a new user.
+      status = 201
+    }
 
-    res.status(201).json(user); // 201 = Created
+    // Give both new and returning Auth0 users our application JWT cookie.
+    sendTokenCookie(res, user)
+    return res.status(status).json(user); // 201 = Created
   } catch (err) {
     handleDbError(err, res, next);
   }
