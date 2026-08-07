@@ -10,6 +10,19 @@ const Categories = db.define("category", {
             notEmpty: true,
         },
     },
+    
+    color: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        defaultValue: "#949494", // Grey
+        validate: {
+           isHexColor(value) {
+                if (!/^#[0-9A-Fa-f]{6}$/.test(value)) {
+                    throw new Error('Category color must be a valid six-digit hex color.');
+                }
+            }
+        },
+    }
 });
 
 module.exports = Categories

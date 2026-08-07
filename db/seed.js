@@ -13,9 +13,9 @@ async function seed() {
     console.log('🌱 Sample users created.');
 
     const [work, school, personal] = await Category.bulkCreate([
-      { name: 'Work', userId: ada.id },
-      { name: 'School', userId: ada.id },
-      { name: 'Personal', userId: alan.id },
+      { name: 'Work', color: '#2563EB', userId: ada.id },
+      { name: 'School', color: '#7C3AED', userId: ada.id },
+      { name: 'Personal', color: '#16A34A', userId: alan.id },
     ]);
     console.log('🌱 Sample categories created.');
 
