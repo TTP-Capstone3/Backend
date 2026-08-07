@@ -3,10 +3,11 @@ const { ScheduleItem } = require('../models');
 const { requireAuth } = require('../middleware/auth');
 const validateScheduleItem = require('../middleware/validateScheduleItem');
 const { parseCalendarEvents } = require('../services/ics-service');
+const { createIcsCalendar } = require('../services/ics-export-service');
 
 const router = express.Router();
 
-// A user must be logged in before importing calendar events.
+// A user must be logged in before importing or exporting calendar events.
 router.use(requireAuth);
 
 // POST /calendar/import
@@ -65,5 +66,35 @@ router.post(
     }
   },
 );
+
+// GET /calendar/export
+// Return the current user's events as a downloadable ICS calendar.
+router.get('/export', async (req, res, next) => {
+  try {
+    const events = await ScheduleItem.findAll({
+      where: {
+        userId: req.user.id,
+        itemType: 'event',
+      },
+      order: [
+        ['startAt', 'ASC'],
+        ['id', 'ASC'],
+      ],
+    });
+
+    const calendarText = createIcsCalendar(events);
+
+    res
+      .status(200)
+      .set({
+        'Content-Type': 'text/calendar; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="calendar.ics"',
+        'Cache-Control': 'private, no-store',
+      })
+      .send(calendarText);
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;
