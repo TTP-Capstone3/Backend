@@ -5,10 +5,12 @@ const authRouter = require('./auth-routes');
 const scheduleItemRouter = require('./scheduleItem-routes');
 const categoryRouter = require('./category-routes');
 const calendarRouter = require('./calendar-routes');
+const aiRouter = require('./ai-routes');
 
 module.exports = {
   authRouter,
   scheduleItemRouter,
   categoryRouter,
   calendarRouter,
+  aiRouter,
 };
