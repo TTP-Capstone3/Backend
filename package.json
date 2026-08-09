@@ -17,6 +17,7 @@
     "node": "^22.1.0 || ^24.0.0"
   },
   "dependencies": {
+    "@google/genai": "2.16.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
