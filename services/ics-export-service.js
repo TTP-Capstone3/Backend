@@ -134,6 +134,10 @@ function createEventLines(scheduleItem, generatedAt) {
     lines.push(`LOCATION:${escapeCalendarText(scheduleItem.location.trim())}`);
   }
 
+  if (scheduleItem.recurrenceRule?.trim()) {
+    lines.push(`RRULE:${scheduleItem.recurrenceRule.trim()}`);
+  }
+
   lines.push('END:VEVENT');
   return lines;
 }
