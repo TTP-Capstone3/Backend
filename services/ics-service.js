@@ -42,6 +42,25 @@ function normalizeCalendarDate(calendarDate, timeZone) {
   return new Date(zonedDateTime.epochMilliseconds);
 }
 
+// Preserve an imported event's ICS recurrence rule as text so it can be
+// rendered by the frontend and written back out during ICS export.
+function getRecurrenceRule(calendarEvent) {
+  if (!calendarEvent.rrule) {
+    return null;
+  }
+
+  const ruleText = calendarEvent.rrule.toString();
+  const recurrenceLine = ruleText
+    .split(/\r?\n/)
+    .find((line) => line.startsWith('RRULE:'));
+
+  if (!recurrenceLine) {
+    return null;
+  }
+
+  return recurrenceLine.slice('RRULE:'.length).trim();
+}
+
 // Convert one VEVENT from node-ical into the field names used by ScheduleItem.
 function convertCalendarEvent(calendarEvent) {
   const timeZone = calendarEvent.start?.tz || DEFAULT_TIME_ZONE;
@@ -57,6 +76,7 @@ function convertCalendarEvent(calendarEvent) {
     location: getText(calendarEvent.location),
     source: 'ics-import',
     externalUid: getText(calendarEvent.uid),
+    recurrenceRule: getRecurrenceRule(calendarEvent)
   };
 }
 
