@@ -118,7 +118,7 @@ function createEventLines(scheduleItem, generatedAt) {
         )}`,
       );
     }
-  } if (recurrenceRule) {
+  } else if (recurrenceRule) {
     const timeZone = scheduleItem.timeZone || DEFAULT_TIME_ZONE;
 
     lines.push(

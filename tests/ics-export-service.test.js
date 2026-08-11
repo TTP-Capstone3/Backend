@@ -56,6 +56,29 @@ test('uses the event timezone when exporting an all-day event', () => {
   assert.match(calendarText, /DTEND;VALUE=DATE:20260822\r\n/);
 });
 
+test('exports recurring all-day events with one DTSTART and DTEND', () => {
+  const calendarText = createIcsCalendar(
+    [{
+      id: 54,
+      itemType: 'event',
+      title: 'Weekly Holiday',
+      startAt: new Date('2026-08-20T04:00:00.000Z'),
+      endAt: new Date('2026-08-21T04:00:00.000Z'),
+      allDay: true,
+      timeZone: 'America/New_York',
+      recurrenceRule: 'FREQ=WEEKLY;COUNT=3',
+    }],
+    GENERATED_AT,
+  );
+
+  assert.match(calendarText, /DTSTART;VALUE=DATE:20260820/);
+  assert.match(calendarText, /DTEND;VALUE=DATE:20260821/);
+  assert.match(calendarText, /RRULE:FREQ=WEEKLY;COUNT=3/);
+
+  assert.equal((calendarText.match(/DTSTART/g) || []).length, 1);
+  assert.equal((calendarText.match(/DTEND/g) || []).length, 1);
+});
+
 test('creates event text that the existing importer can parse again', async () => {
   const longTitle = 'Capstone planning meeting with a title long enough to require an ICS continuation line';
   const calendarText = createIcsCalendar(
