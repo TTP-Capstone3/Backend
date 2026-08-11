@@ -105,3 +105,21 @@ test('rejects non-event schedule items instead of silently dropping them', () =>
     { message: 'ICS export currently supports event schedule items only.' },
   );
 });
+
+test('exports a recurring event with its RRULE', () => {
+  const calendarText = createIcsCalendar(
+    [{
+      id: 50,
+      itemType: 'event',
+      title: 'Class',
+      startAt: new Date('2026-08-10T14:00:00.000Z'),
+      endAt: new Date('2026-08-10T15:00:00.000Z'),
+      allDay: false,
+      timeZone: 'America/New_York',
+      recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH',
+    }],
+    GENERATED_AT,
+  );
+
+  assert.match(calendarText, /RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH/);
+});
