@@ -123,3 +123,62 @@ test('exports a recurring event with its RRULE', () => {
 
   assert.match(calendarText, /RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH/);
 });
+
+test('exports recurring timed events using local timezone across DST', () => {
+  const calendarText = createIcsCalendar(
+    [{
+      id: 51,
+      itemType: 'event',
+      title: 'Weekly Class',
+      startAt: new Date('2026-10-26T14:00:00.000Z'),
+      endAt: new Date('2026-10-26T15:00:00.000Z'),
+      allDay: false,
+      timeZone: 'America/New_York',
+      recurrenceRule: 'FREQ=WEEKLY;COUNT=3',
+    }],
+    GENERATED_AT,
+  );
+
+  assert.match(calendarText, /DTSTART;TZID=America\/New_York:20261026T100000/);
+  assert.match(calendarText, /DTEND;TZID=America\/New_York:20261026T110000/);
+  assert.match(calendarText, /RRULE:FREQ=WEEKLY;COUNT=3/);
+  assert.doesNotMatch(calendarText,/DTSTART:20261026T140000Z/);
+});
+
+test('rejects an invalid recurrence rule', () => {
+  assert.throws(() =>
+      createIcsCalendar(
+        [{
+          id: 52,
+          itemType: 'event',
+          title: 'Bad recurrence',
+          startAt: new Date('2026-08-10T14:00:00.000Z'),
+          endAt: new Date('2026-08-10T15:00:00.000Z'),
+          allDay: false,
+          timeZone: 'America/New_York',
+          recurrenceRule: 'NOT A VALID RRULE',
+        }],
+        GENERATED_AT,
+      ),
+    { message: 'recurrenceRule must be a valid RRULE.' },
+  );
+});
+
+test('rejects recurrence rules containing newlines', () => {
+  assert.throws(() =>
+      createIcsCalendar(
+        [{
+          id: 53,
+          itemType: 'event',
+          title: 'Bad recurrence',
+          startAt: new Date('2026-08-10T14:00:00.000Z'),
+          endAt: new Date('2026-08-10T15:00:00.000Z'),
+          allDay: false,
+          timeZone: 'America/New_York',
+          recurrenceRule: 'FREQ=WEEKLY\nSUMMARY:Injected',
+        }],
+        GENERATED_AT,
+      ),
+    { message: 'recurrenceRule must be a single-line RRULE.' },
+  );
+});
