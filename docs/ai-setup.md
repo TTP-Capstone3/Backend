@@ -1,7 +1,7 @@
-# Gemini AI starter setup
+# Gemini setup
 
-This starter layer connects the backend to the Gemini Developer API. It does
-not read calendars, create events, or provide a chat endpoint yet.
+This connects the backend to the Gemini Developer API. It can turn one message
+into a validated schedule item preview, but it does not save the item.
 
 ## Local setup
 
@@ -37,17 +37,11 @@ Current details are in Google's [pricing](https://ai.google.dev/gemini-api/docs/
 [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits), and
 [terms](https://ai.google.dev/gemini-api/terms).
 
-## Recommended next feature
+## Next frontend step
 
-Build the calendar assistant as a separate, protected endpoint. That endpoint
-should:
+`POST /ai/schedule-proposal` is ready for the Chat UI. The frontend still needs
+to send the message and time zone, show the reply or proposal, and wait for the
+user to confirm it.
 
-1. Ask Gemini for structured event details instead of letting it write to the
-   database.
-2. Validate Gemini's response in the backend.
-3. Load only the signed-in user's events and use normal backend code to check
-   for time conflicts and find open study time.
-4. Return a proposal to the frontend and wait for the user to confirm it.
-
-This keeps Gemini responsible for understanding the user's words while the
-backend remains responsible for calendar rules and database changes.
+After confirmation, save the item through the normal `POST /schedule-items`
+route. Gemini should only prepare the preview.
