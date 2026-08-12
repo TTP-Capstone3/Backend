@@ -1,4 +1,5 @@
 const { Temporal } = require('temporal-polyfill');
+const { RRule } = require('rrule')
 
 const DEFAULT_TIME_ZONE = 'America/New_York';
 const PRODUCT_ID = '-//TTP Capstone 3//AI Calendar//EN';
@@ -91,6 +92,7 @@ function createEventLines(scheduleItem, generatedAt) {
     throw new Error('An exported event needs a startAt date.');
   }
 
+  const recurrenceRule = normalizeRecurrenceRule(scheduleItem.recurrenceRule);
   const title = scheduleItem.title?.trim() || 'Untitled event';
   const lines = [
     'BEGIN:VEVENT',
@@ -116,6 +118,26 @@ function createEventLines(scheduleItem, generatedAt) {
         )}`,
       );
     }
+  } else if (recurrenceRule) {
+    const timeZone = scheduleItem.timeZone || DEFAULT_TIME_ZONE;
+
+    lines.push(
+      `DTSTART;TZID=${timeZone}:${formatZonedDateTime(
+        scheduleItem.startAt,
+        timeZone,
+        'startAt',
+      )}`,
+    );
+
+    if (scheduleItem.endAt) {
+      lines.push(
+        `DTEND;TZID=${timeZone}:${formatZonedDateTime(
+          scheduleItem.endAt,
+          timeZone,
+          'endAt',
+        )}`,
+      );
+    }
   } else {
     lines.push(`DTSTART:${formatUtcDateTime(scheduleItem.startAt, 'startAt')}`);
 
@@ -134,8 +156,65 @@ function createEventLines(scheduleItem, generatedAt) {
     lines.push(`LOCATION:${escapeCalendarText(scheduleItem.location.trim())}`);
   }
 
+  if (scheduleItem.recurrenceRule?.trim()) {
+    lines.push(`RRULE:${recurrenceRule}`);
+  }
+
   lines.push('END:VEVENT');
   return lines;
+}
+
+function normalizeRecurrenceRule(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error('recurrenceRule must be a string.');
+  }
+
+  // RRULE should remain one ICS line.
+  if (/[\r\n]/.test(value)) {
+    throw new Error('recurrenceRule must be a single-line RRULE.');
+  }
+
+  const recurrenceRule = value.trim();
+
+  try {
+    RRule.fromString(recurrenceRule);
+  } catch {
+    throw new Error('recurrenceRule must be a valid RRULE.');
+  }
+
+  return recurrenceRule;
+}
+
+function formatZonedDateTime(value, timeZone, fieldName) {
+  const date = value instanceof Date ? value : new Date(value);
+  
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`${fieldName} must be a valid date.`);
+  }
+
+  const eventTimeZone = timeZone || DEFAULT_TIME_ZONE;
+
+  try {
+    const zonedDateTime = Temporal.Instant
+      .fromEpochMilliseconds(date.getTime())
+      .toZonedDateTimeISO(eventTimeZone);
+
+    const pad = (number) => String(number).padStart(2, '0');
+    return (
+      `${zonedDateTime.year}` +
+      `${pad(zonedDateTime.month)}` +
+      `${pad(zonedDateTime.day)}T` +
+      `${pad(zonedDateTime.hour)}` +
+      `${pad(zonedDateTime.minute)}` +
+      `${pad(zonedDateTime.second)}`
+    );
+  } catch {
+    throw new Error('timeZone must be a valid IANA timezone.');
+  }
 }
 
 // Create one complete calendar document from event schedule items. generatedAt

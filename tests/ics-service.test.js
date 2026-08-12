@@ -102,3 +102,22 @@ test('rejects empty calendar text', async () => {
     message: 'Calendar text is required.',
   });
 });
+
+test('preserves an imported recurrence rule', async () => {
+  const calendarText = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'BEGIN:VEVENT',
+    'UID:class@example.com',
+    'SUMMARY:Class',
+    'DTSTART;TZID=America/New_York:20260810T100000',
+    'DTEND;TZID=America/New_York:20260810T110000',
+    'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\n');
+
+  const events = await parseCalendarEvents(calendarText);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].recurrenceRule, 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH');
+});
