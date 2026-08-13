@@ -12,7 +12,7 @@ router.get('/status', (req, res) => {
   res.json(getAiStatus());
 });
 
-// Makes a preview only. It does not save the item.
+// Makes previews only. It does not save the items.
 router.post('/schedule-proposal', requireAuth, async (req, res) => {
   try {
     const result = await createScheduleProposal(req.body?.message, {
