@@ -1,7 +1,7 @@
 # Gemini setup
 
 This connects the backend to the Gemini Developer API. It can turn one message
-into a validated schedule item preview, but it does not save the item.
+into validated schedule item previews, but it does not save the items.
 
 ## Local setup
 
@@ -40,8 +40,8 @@ Current details are in Google's [pricing](https://ai.google.dev/gemini-api/docs/
 ## Next frontend step
 
 `POST /ai/schedule-proposal` is ready for the Chat UI. The frontend still needs
-to send the message and time zone, show the reply or proposal, and wait for the
-user to confirm it.
+to send the message and time zone, show the reply and item previews, and wait
+for the user to confirm them.
 
-After confirmation, save the item through the normal `POST /schedule-items`
-route. Gemini should only prepare the preview.
+After confirmation, save each item through the normal `POST /schedule-items`
+route. Gemini should only prepare the previews.

@@ -3,6 +3,7 @@ const { sendStructuredPrompt } = require('./gemini-client');
 
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_SHORT_TEXT_LENGTH = 255;
+const MAX_PROPOSAL_ITEMS = 10;
 
 const MISSING_FIELDS = [
   'title',
@@ -30,8 +31,32 @@ const PROPOSAL_FIELDS = [
   'location',
 ];
 
-// Shape we expect back from Gemini.
-const SCHEDULE_PROPOSAL_SCHEMA = {
+const PROPOSAL_SCHEMA = {
+  type: ['object', 'null'],
+  additionalProperties: false,
+  properties: {
+    title: { type: 'string' },
+    description: { type: ['string', 'null'] },
+    itemType: {
+      type: 'string',
+      enum: ['task', 'event', 'reminder', 'note'],
+    },
+    startAt: { type: ['string', 'null'], format: 'date-time' },
+    endAt: { type: ['string', 'null'], format: 'date-time' },
+    dueAt: { type: ['string', 'null'], format: 'date-time' },
+    reminderAt: { type: ['string', 'null'], format: 'date-time' },
+    allDay: { type: 'boolean' },
+    priority: {
+      type: 'string',
+      enum: ['none', 'very low', 'low', 'medium', 'high', 'very high'],
+    },
+    estimatedMinutes: { type: ['integer', 'null'], minimum: 1 },
+    location: { type: ['string', 'null'] },
+  },
+  required: PROPOSAL_FIELDS,
+};
+
+const ITEM_RESULT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -39,34 +64,7 @@ const SCHEDULE_PROPOSAL_SCHEMA = {
       type: 'string',
       enum: ['proposal', 'clarification'],
     },
-    reply: {
-      type: 'string',
-      description: 'A short, friendly response to the user.',
-    },
-    proposal: {
-      type: ['object', 'null'],
-      additionalProperties: false,
-      properties: {
-        title: { type: 'string' },
-        description: { type: ['string', 'null'] },
-        itemType: {
-          type: 'string',
-          enum: ['task', 'event', 'reminder', 'note'],
-        },
-        startAt: { type: ['string', 'null'], format: 'date-time' },
-        endAt: { type: ['string', 'null'], format: 'date-time' },
-        dueAt: { type: ['string', 'null'], format: 'date-time' },
-        reminderAt: { type: ['string', 'null'], format: 'date-time' },
-        allDay: { type: 'boolean' },
-        priority: {
-          type: 'string',
-          enum: ['none', 'very low', 'low', 'medium', 'high', 'very high'],
-        },
-        estimatedMinutes: { type: ['integer', 'null'], minimum: 1 },
-        location: { type: ['string', 'null'] },
-      },
-      required: PROPOSAL_FIELDS,
-    },
+    proposal: PROPOSAL_SCHEMA,
     missingFields: {
       type: 'array',
       items: {
@@ -74,8 +72,28 @@ const SCHEDULE_PROPOSAL_SCHEMA = {
         enum: MISSING_FIELDS,
       },
     },
+    question: {
+      type: ['string', 'null'],
+    },
   },
-  required: ['kind', 'reply', 'proposal', 'missingFields'],
+  required: ['kind', 'proposal', 'missingFields', 'question'],
+};
+
+// Shape we expect back from Gemini.
+const SCHEDULE_PROPOSAL_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    reply: {
+      type: 'string',
+      description: 'A short, friendly response to the user.',
+    },
+    items: {
+      type: 'array',
+      items: ITEM_RESULT_SCHEMA,
+    },
+  },
+  required: ['reply', 'items'],
 };
 
 const createError = (code, message) => {
@@ -128,14 +146,19 @@ const cleanCurrentTime = (currentTime) => {
 
 const buildPrompt = (message, timeZone, currentTime) => {
   return [
-    'Turn the user message into one schedule item.',
+    'Turn the user message into one or more schedule items.',
     `Current time in UTC: ${currentTime.toISOString()}`,
     `User time zone: ${timeZone}`,
     '',
     'Rules:',
-    '- Use kind "proposal" when every required detail is known.',
-    '- Use kind "clarification" when an important detail is missing.',
-    '- For clarification, set proposal to null and ask one short question.',
+    '- Return one item for every schedule item the user asks for.',
+    `- Return no more than ${MAX_PROPOSAL_ITEMS} items.`,
+    '- Keep the items in the same order as the user message.',
+    '- Do not combine separate items or leave any out.',
+    '- Use kind "proposal" when that item has every required detail.',
+    '- Use kind "clarification" when that item is missing an important detail.',
+    '- For a proposal, set question to null and missingFields to an empty array.',
+    '- For a clarification, set proposal to null and ask one short question.',
     '- Events require startAt and endAt.',
     '- Reminders require reminderAt.',
     '- Do not invent a required date or time.',
@@ -231,45 +254,43 @@ const validateProposalShape = (proposal) => {
   }
 };
 
-const normalizeModelResponse = (response, timeZone) => {
-  if (!response || typeof response !== 'object' || Array.isArray(response)) {
-    invalidResponse('Gemini returned an invalid schedule response.');
+const normalizeItemResult = (item, timeZone) => {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    invalidResponse('Gemini returned an invalid schedule item response.');
   }
 
-  const reply = typeof response.reply === 'string' ? response.reply.trim() : '';
-  if (!reply) {
-    invalidResponse('Gemini returned a response without a reply.');
-  }
+  const missingFields = cleanMissingFields(item.missingFields);
 
-  const missingFields = cleanMissingFields(response.missingFields);
+  if (item.kind === 'clarification') {
+    const question =
+      typeof item.question === 'string' ? item.question.trim() : '';
 
-  if (response.kind === 'clarification') {
-    if (response.proposal !== null || missingFields.length === 0) {
+    if (item.proposal !== null || missingFields.length === 0 || !question) {
       invalidResponse('Gemini returned an invalid clarification response.');
     }
 
     return {
       kind: 'clarification',
-      reply,
       proposal: null,
       missingFields,
+      question,
     };
   }
 
   if (
-    response.kind !== 'proposal' ||
-    !response.proposal ||
-    typeof response.proposal !== 'object' ||
-    Array.isArray(response.proposal)
+    item.kind !== 'proposal' ||
+    !item.proposal ||
+    typeof item.proposal !== 'object' ||
+    Array.isArray(item.proposal)
   ) {
     invalidResponse('Gemini did not return a valid schedule proposal.');
   }
 
-  if (missingFields.length > 0) {
+  if (missingFields.length > 0 || item.question !== null) {
     invalidResponse('Gemini returned a proposal with missing details.');
   }
 
-  const rawProposal = response.proposal;
+  const rawProposal = item.proposal;
   validateProposalShape(rawProposal);
 
   const proposal = {
@@ -297,9 +318,33 @@ const normalizeModelResponse = (response, timeZone) => {
 
   return {
     kind: 'proposal',
-    reply,
     proposal,
     missingFields: [],
+    question: null,
+  };
+};
+
+const normalizeModelResponse = (response, timeZone) => {
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    invalidResponse('Gemini returned an invalid schedule response.');
+  }
+
+  const reply = typeof response.reply === 'string' ? response.reply.trim() : '';
+  if (!reply) {
+    invalidResponse('Gemini returned a response without a reply.');
+  }
+
+  if (
+    !Array.isArray(response.items) ||
+    response.items.length === 0 ||
+    response.items.length > MAX_PROPOSAL_ITEMS
+  ) {
+    invalidResponse('Gemini returned an invalid number of schedule items.');
+  }
+
+  return {
+    reply,
+    items: response.items.map((item) => normalizeItemResult(item, timeZone)),
   };
 };
 
@@ -322,6 +367,7 @@ const createScheduleProposal = async (message, options = {}) => {
 
 module.exports = {
   MAX_MESSAGE_LENGTH,
+  MAX_PROPOSAL_ITEMS,
   SCHEDULE_PROPOSAL_SCHEMA,
   createScheduleProposal,
 };
