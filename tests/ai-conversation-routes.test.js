@@ -26,6 +26,7 @@ const originalMethods = {
   findUser: User.findByPk,
   findConversation: AiConversation.findOne,
   findOrCreateConversation: AiConversation.findOrCreate,
+  findMessage: AiMessage.findOne,
   findMessages: AiMessage.findAll,
   createMessage: AiMessage.create,
 };
@@ -50,6 +51,7 @@ test.after(async () => {
   User.findByPk = originalMethods.findUser;
   AiConversation.findOne = originalMethods.findConversation;
   AiConversation.findOrCreate = originalMethods.findOrCreateConversation;
+  AiMessage.findOne = originalMethods.findMessage;
   AiMessage.findAll = originalMethods.findMessages;
   AiMessage.create = originalMethods.createMessage;
   scheduleProposalService.createScheduleProposal =
@@ -83,9 +85,18 @@ test('conversation message routes require authentication', async () => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sender: 'user', text: 'Add a meeting' }),
   });
+  const patchResponse = await fetch(
+    `${baseUrl}/ai/conversation/messages/message-1`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [] }),
+    },
+  );
 
   assert.equal(getResponse.status, 401);
   assert.equal(postResponse.status, 401);
+  assert.equal(patchResponse.status, 401);
 });
 
 test('loads messages only from the current user conversation', async () => {
@@ -259,4 +270,140 @@ test('uses the current user recent messages for an AI proposal', async () => {
       'Assistant: What time is soccer practice?',
     ].join('\n'),
   );
+});
+
+test('updates proposal items in the current user AI message', async () => {
+  let messageQuery;
+  let messageUpdate;
+  const updatedItems = [
+    {
+      kind: 'proposal',
+      proposal: { title: 'Soccer practice' },
+      isSaved: true,
+    },
+  ];
+  const message = {
+    id: 'message-1',
+    conversationId: 'conversation-1',
+    sender: 'ai',
+    text: 'Review this item:',
+    items: [
+      {
+        kind: 'proposal',
+        proposal: { title: 'Soccer practice' },
+      },
+    ],
+    async update(data) {
+      messageUpdate = data;
+      this.items = data.items;
+    },
+  };
+
+  User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
+  AiConversation.findOne = async () => ({ id: 'conversation-1' });
+  AiMessage.findOne = async (options) => {
+    messageQuery = options;
+    return message;
+  };
+
+  const response = await fetch(
+    `${baseUrl}/ai/conversation/messages/message-1`,
+    {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        text: 'Changed by the client',
+        conversationId: 'another-conversation',
+        items: updatedItems,
+      }),
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(messageQuery.where, {
+    id: 'message-1',
+    conversationId: 'conversation-1',
+  });
+  assert.deepEqual(messageUpdate, { items: updatedItems });
+  assert.equal(body.text, 'Review this item:');
+  assert.equal(body.items[0].isSaved, true);
+});
+
+test('does not update a message outside the current user conversation', async () => {
+  let messageQuery;
+
+  User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
+  AiConversation.findOne = async () => ({ id: 'conversation-1' });
+  AiMessage.findOne = async (options) => {
+    messageQuery = options;
+    return null;
+  };
+
+  const response = await fetch(
+    `${baseUrl}/ai/conversation/messages/another-users-message`,
+    {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ items: [] }),
+    },
+  );
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(messageQuery.where, {
+    id: 'another-users-message',
+    conversationId: 'conversation-1',
+  });
+});
+
+test('rejects invalid AI message updates', async () => {
+  let updateCount = 0;
+  const message = {
+    sender: 'ai',
+    text: 'Review this item:',
+    async update() {
+      updateCount += 1;
+    },
+  };
+
+  User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
+  AiConversation.findOne = async () => ({ id: 'conversation-1' });
+  AiMessage.findOne = async () => message;
+
+  const missingItemsResponse = await fetch(
+    `${baseUrl}/ai/conversation/messages/message-1`,
+    {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ text: 'Only text was sent' }),
+    },
+  );
+  const invalidItemsResponse = await fetch(
+    `${baseUrl}/ai/conversation/messages/message-1`,
+    {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ items: 'not an array' }),
+    },
+  );
+  message.sender = 'user';
+  const userMessageResponse = await fetch(
+    `${baseUrl}/ai/conversation/messages/message-1`,
+    {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ items: [] }),
+    },
+  );
+
+  assert.equal(missingItemsResponse.status, 400);
+  assert.deepEqual(await missingItemsResponse.json(), {
+    error: 'Message items are required.',
+  });
+  assert.equal(invalidItemsResponse.status, 400);
+  assert.equal(userMessageResponse.status, 400);
+  assert.deepEqual(await userMessageResponse.json(), {
+    error: 'Only AI message items can be updated.',
+  });
+  assert.equal(updateCount, 0);
 });

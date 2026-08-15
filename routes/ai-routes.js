@@ -122,4 +122,63 @@ router.post('/conversation/messages', requireAuth, async (req, res, next) => {
   }
 });
 
+// Update proposal items in one saved AI message.
+router.patch(
+  '/conversation/messages/:messageId',
+  requireAuth,
+  async (req, res, next) => {
+    try {
+      const conversation = await AiConversation.findOne({
+        where: { userId: req.user.id },
+      });
+
+      if (!conversation) {
+        return res.status(404).json({ error: 'AI message not found.' });
+      }
+
+      const message = await AiMessage.findOne({
+        where: {
+          id: req.params.messageId,
+          conversationId: conversation.id,
+        },
+      });
+
+      if (!message) {
+        return res.status(404).json({ error: 'AI message not found.' });
+      }
+
+      if (message.sender !== 'ai') {
+        return res.status(400).json({
+          error: 'Only AI message items can be updated.',
+        });
+      }
+
+      if (!req.body || !Object.hasOwn(req.body, 'items')) {
+        return res.status(400).json({
+          error: 'Message items are required.',
+        });
+      }
+
+      const validationErrors = validateAiMessage({
+        sender: message.sender,
+        text: message.text,
+        items: req.body.items,
+      });
+
+      if (validationErrors.length > 0) {
+        return res.status(400).json({
+          error: 'Invalid AI message.',
+          details: validationErrors,
+        });
+      }
+
+      await message.update({ items: req.body.items });
+
+      res.status(200).json(message);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 module.exports = router;
