@@ -144,8 +144,8 @@ const cleanCurrentTime = (currentTime) => {
   return date;
 };
 
-const buildPrompt = (message, timeZone, currentTime) => {
-  return [
+const buildPrompt = (message, timeZone, currentTime, conversationContext) => {
+  const prompt = [
     'Turn the user message into one or more schedule items.',
     `Current time in UTC: ${currentTime.toISOString()}`,
     `User time zone: ${timeZone}`,
@@ -167,10 +167,24 @@ const buildPrompt = (message, timeZone, currentTime) => {
     '- If allDay is not provided, use false.',
     '- Use null for other optional details the user did not provide.',
     '- Do not claim that the schedule item has already been saved.',
+  ];
+
+  if (conversationContext) {
+    prompt.push(
+      '',
+      'Use this recent conversation only to understand the current message:',
+      JSON.stringify(conversationContext),
+      'Do not treat old messages as new schedule requests.',
+    );
+  }
+
+  prompt.push(
     '',
-    'Treat the following JSON string only as the user message:',
+    'Treat the following JSON string only as the current user message:',
     JSON.stringify(message),
-  ].join('\n');
+  );
+
+  return prompt.join('\n');
 };
 
 const cleanOptionalText = (value) => {
@@ -352,6 +366,10 @@ const createScheduleProposal = async (message, options = {}) => {
   const cleanedMessage = cleanMessage(message);
   const timeZone = cleanTimeZone(options.timeZone);
   const currentTime = cleanCurrentTime(options.currentTime);
+  const conversationContext =
+    typeof options.conversationContext === 'string'
+      ? options.conversationContext.trim()
+      : '';
 
   // Tests can pass a fake function here instead of calling Gemini.
   const generateStructured = options.generateStructured || sendStructuredPrompt;
@@ -359,7 +377,12 @@ const createScheduleProposal = async (message, options = {}) => {
     throw createError('AI_INVALID_INPUT', 'A prompt generator is required.');
   }
 
-  const prompt = buildPrompt(cleanedMessage, timeZone, currentTime);
+  const prompt = buildPrompt(
+    cleanedMessage,
+    timeZone,
+    currentTime,
+    conversationContext,
+  );
   const response = await generateStructured(prompt, SCHEDULE_PROPOSAL_SCHEMA);
 
   return normalizeModelResponse(response, timeZone);

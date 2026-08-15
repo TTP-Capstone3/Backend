@@ -4,6 +4,10 @@ const { requireAuth } = require('../middleware/auth');
 const validateAiMessage = require('../middleware/validateAiMessage');
 const { getAiStatus } = require('../services/ai/ai-config');
 const {
+  MAX_CONTEXT_MESSAGES,
+  buildConversationContext,
+} = require('../services/ai/conversation-context');
+const {
   createScheduleProposal,
 } = require('../services/ai/schedule-proposal-service');
 
@@ -14,11 +18,38 @@ router.get('/status', (req, res) => {
   res.json(getAiStatus());
 });
 
+async function loadConversationContext(userId) {
+  const conversation = await AiConversation.findOne({
+    where: { userId },
+  });
+
+  if (!conversation) {
+    return '';
+  }
+
+  const newestMessages = await AiMessage.findAll({
+    where: { conversationId: conversation.id },
+    order: [['createdAt', 'DESC']],
+    limit: MAX_CONTEXT_MESSAGES,
+  });
+
+  return buildConversationContext([...newestMessages].reverse());
+}
+
 // Makes previews only. It does not save the items.
-router.post('/schedule-proposal', requireAuth, async (req, res) => {
+router.post('/schedule-proposal', requireAuth, async (req, res, next) => {
+  let conversationContext;
+
+  try {
+    conversationContext = await loadConversationContext(req.user.id);
+  } catch (error) {
+    return next(error);
+  }
+
   try {
     const result = await createScheduleProposal(req.body?.message, {
       timeZone: req.body?.timeZone,
+      conversationContext,
     });
 
     res.status(200).json(result);

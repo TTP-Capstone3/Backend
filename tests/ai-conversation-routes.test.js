@@ -11,6 +11,15 @@ process.env.AUTH0_AUDIENCE ||= 'https://example.test/api';
 
 const { User, AiConversation, AiMessage } = require('../models');
 const { signToken } = require('../middleware/auth');
+const scheduleProposalService = require('../services/ai/schedule-proposal-service');
+
+const originalCreateScheduleProposal =
+  scheduleProposalService.createScheduleProposal;
+let createScheduleProposal = originalCreateScheduleProposal;
+
+scheduleProposalService.createScheduleProposal = (...args) =>
+  createScheduleProposal(...args);
+
 const aiRouter = require('../routes/ai-routes');
 
 const originalMethods = {
@@ -43,6 +52,8 @@ test.after(async () => {
   AiConversation.findOrCreate = originalMethods.findOrCreateConversation;
   AiMessage.findAll = originalMethods.findMessages;
   AiMessage.create = originalMethods.createMessage;
+  scheduleProposalService.createScheduleProposal =
+    originalCreateScheduleProposal;
 
   await new Promise((resolve, reject) => {
     server.close((error) => {
@@ -187,4 +198,65 @@ test('rejects an invalid message before using the database', async () => {
   assert.equal(body.error, 'Invalid AI message.');
   assert.equal(body.details.includes('User messages cannot include AI items.'), true);
   assert.equal(usedDatabase, false);
+});
+
+test('uses the current user recent messages for an AI proposal', async () => {
+  let conversationQuery;
+  let messageQuery;
+  let proposalRequest;
+
+  User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
+  AiConversation.findOne = async (options) => {
+    conversationQuery = options;
+    return { id: 'conversation-1' };
+  };
+  AiMessage.findAll = async (options) => {
+    messageQuery = options;
+    return [
+      {
+        sender: 'ai',
+        text: '',
+        items: [
+          {
+            kind: 'clarification',
+            question: 'What time is soccer practice?',
+          },
+        ],
+      },
+      {
+        sender: 'user',
+        text: 'Add soccer practice tomorrow',
+      },
+    ];
+  };
+  createScheduleProposal = async (message, options) => {
+    proposalRequest = { message, options };
+    return { reply: 'I created a proposal.', items: [] };
+  };
+
+  const response = await fetch(`${baseUrl}/ai/schedule-proposal`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      message: '4 PM to 9 PM',
+      timeZone: 'America/New_York',
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(conversationQuery.where, { userId: 'user-1' });
+  assert.deepEqual(messageQuery, {
+    where: { conversationId: 'conversation-1' },
+    order: [['createdAt', 'DESC']],
+    limit: 10,
+  });
+  assert.equal(proposalRequest.message, '4 PM to 9 PM');
+  assert.equal(proposalRequest.options.timeZone, 'America/New_York');
+  assert.equal(
+    proposalRequest.options.conversationContext,
+    [
+      'User: Add soccer practice tomorrow',
+      'Assistant: What time is soccer practice?',
+    ].join('\n'),
+  );
 });
