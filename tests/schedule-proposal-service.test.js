@@ -87,6 +87,35 @@ test('creates a validated event proposal without saving anything', async () => {
   });
 });
 
+test('includes recent conversation context in the prompt', async () => {
+  const conversationContext = [
+    'User: Add soccer practice tomorrow',
+    'Assistant: What time is soccer practice?',
+  ].join('\n');
+  let prompt;
+
+  await createScheduleProposal('4 PM to 9 PM', {
+    timeZone: 'America/New_York',
+    currentTime: '2026-08-15T05:00:00.000Z',
+    conversationContext,
+    generateStructured: async (receivedPrompt) => {
+      prompt = receivedPrompt;
+      return makeResponse([
+        makeProposalItem({
+          title: 'Soccer practice',
+          startAt: '2026-08-16T16:00:00-04:00',
+          endAt: '2026-08-16T21:00:00-04:00',
+        }),
+      ]);
+    },
+  });
+
+  assert.match(prompt, /Use this recent conversation/);
+  assert.equal(prompt.includes(JSON.stringify(conversationContext)), true);
+  assert.equal(prompt.includes(JSON.stringify('4 PM to 9 PM')), true);
+  assert.match(prompt, /Do not treat old messages as new schedule requests/);
+});
+
 test('creates multiple proposals and keeps their order', async () => {
   const response = makeResponse([
     makeProposalItem({
