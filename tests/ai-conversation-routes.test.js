@@ -9,7 +9,7 @@ process.env.JWT_SECRET ||= 'test-only-jwt-secret';
 process.env.AUTH0_DOMAIN ||= 'example.auth0.com';
 process.env.AUTH0_AUDIENCE ||= 'https://example.test/api';
 
-const { User, AiConversation, AiMessage } = require('../models');
+const { User, AiConversation, AiMessage, ScheduleItem } = require('../models');
 const { signToken } = require('../middleware/auth');
 const scheduleProposalService = require('../services/ai/schedule-proposal-service');
 
@@ -29,6 +29,7 @@ const originalMethods = {
   findMessage: AiMessage.findOne,
   findMessages: AiMessage.findAll,
   createMessage: AiMessage.create,
+  findScheduleItems: ScheduleItem.findAll,
 };
 
 let server;
@@ -54,6 +55,7 @@ test.after(async () => {
   AiMessage.findOne = originalMethods.findMessage;
   AiMessage.findAll = originalMethods.findMessages;
   AiMessage.create = originalMethods.createMessage;
+  ScheduleItem.findAll = originalMethods.findScheduleItems;
   scheduleProposalService.createScheduleProposal =
     originalCreateScheduleProposal;
 
@@ -244,6 +246,7 @@ test('uses the current user recent messages for an AI proposal', async () => {
     proposalRequest = { message, options };
     return { reply: 'I created a proposal.', items: [] };
   };
+  ScheduleItem.findAll = async () => [];
 
   const response = await fetch(`${baseUrl}/ai/schedule-proposal`, {
     method: 'POST',

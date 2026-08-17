@@ -1,5 +1,5 @@
 const express = require('express');
-const { AiConversation, AiMessage } = require('../models');
+const { AiConversation, AiMessage, ScheduleItem } = require('../models');
 const { requireAuth } = require('../middleware/auth');
 const validateAiMessage = require('../middleware/validateAiMessage');
 const { getAiStatus } = require('../services/ai/ai-config');
@@ -10,6 +10,7 @@ const {
 const {
   createScheduleProposal,
 } = require('../services/ai/schedule-proposal-service');
+const { findConflicts } = require('../utils/scheduleConflicts');
 
 const router = express.Router();
 
@@ -52,7 +53,23 @@ router.post('/schedule-proposal', requireAuth, async (req, res, next) => {
       conversationContext,
     });
 
-    res.status(200).json(result);
+    // Check each proposed item against the user's real schedule.
+    const existingItems = await ScheduleItem.findAll({
+      where: { userId: req.user.id },
+    });
+
+    const itemsWithConflicts = result.items.map((item) => {
+      if (item.kind !== 'proposal') {
+        return item;
+      }
+
+      return {
+        ...item,
+        conflicts: findConflicts(existingItems, item.proposal),
+      };
+    });
+
+    res.status(200).json({ reply: result.reply, items: itemsWithConflicts });
   } catch (error) {
     if (error.code === 'AI_INVALID_INPUT') {
       return res.status(400).json({ error: error.message });
