@@ -1,4 +1,5 @@
 const express = require('express');
+const { Temporal } = require('temporal-polyfill');
 const { AiConversation, AiMessage, ScheduleItem } = require('../models');
 const { requireAuth } = require('../middleware/auth');
 const validateAiMessage = require('../middleware/validateAiMessage');
@@ -10,9 +11,64 @@ const {
 const {
   createScheduleProposal,
 } = require('../services/ai/schedule-proposal-service');
-const { findConflicts } = require('../utils/scheduleConflicts');
+const { findConflicts, findFreeSlots } = require('../utils/scheduleConflicts');
 
 const router = express.Router();
+
+const SUGGESTION_WINDOW_START_HOUR = 6;
+const SUGGESTION_WINDOW_END_HOUR = 22;
+const MAX_SUGGESTED_SLOTS = 3;
+
+// The waking-hours window (in the event's own timezone) to search for a free slot.
+function getSuggestionWindow(date, timeZone) {
+  const zoned = Temporal.Instant.fromEpochMilliseconds(date.getTime()).toZonedDateTimeISO(
+    timeZone,
+  );
+
+  const windowStart = zoned.with({
+    hour: SUGGESTION_WINDOW_START_HOUR,
+    minute: 0,
+    second: 0,
+    millisecond: 0,
+  });
+  const windowEnd = zoned.with({
+    hour: SUGGESTION_WINDOW_END_HOUR,
+    minute: 0,
+    second: 0,
+    millisecond: 0,
+  });
+
+  return {
+    start: new Date(windowStart.toInstant().epochMilliseconds),
+    end: new Date(windowEnd.toInstant().epochMilliseconds),
+  };
+}
+
+// Only events have a real duration worth relocating, and only when it actually conflicts.
+function suggestFreeSlots(existingItems, proposal, conflicts) {
+  if (conflicts.length === 0 || proposal.itemType !== 'event') {
+    return [];
+  }
+
+  if (!proposal.startAt || !proposal.endAt) {
+    return [];
+  }
+
+  const start = new Date(proposal.startAt);
+  const end = new Date(proposal.endAt);
+  const durationMinutes = Math.round((end - start) / 60000);
+
+  const window = getSuggestionWindow(start, proposal.timeZone);
+
+  // findFreeSlots returns the whole open gap, not just enough for this event,
+  // so trim each one down to the actual length being scheduled.
+  return findFreeSlots(existingItems, window.start, window.end, durationMinutes)
+    .slice(0, MAX_SUGGESTED_SLOTS)
+    .map((slot) => ({
+      start: slot.start,
+      end: new Date(slot.start.getTime() + durationMinutes * 60000),
+    }));
+}
 
 // Only checks if Gemini is set up. It never returns the API key.
 router.get('/status', (req, res) => {
@@ -63,9 +119,12 @@ router.post('/schedule-proposal', requireAuth, async (req, res, next) => {
         return item;
       }
 
+      const conflicts = findConflicts(existingItems, item.proposal);
+
       return {
         ...item,
-        conflicts: findConflicts(existingItems, item.proposal),
+        conflicts,
+        freeSlots: suggestFreeSlots(existingItems, item.proposal, conflicts),
       };
     });
 
