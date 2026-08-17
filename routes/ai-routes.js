@@ -38,9 +38,22 @@ function getSuggestionWindow(date, timeZone) {
     millisecond: 0,
   });
 
+  const start = new Date(windowStart.toInstant().epochMilliseconds);
+  const end = new Date(windowEnd.toInstant().epochMilliseconds);
+  const now = new Date();
+
+  // Don't suggest a slot earlier today that has already passed.
+  return { start: start < now ? now : start, end };
+}
+
+// Only the fields the chat UI actually shows, so the AI response doesn't
+// carry the other user's full schedule item (description, recurrence, etc).
+function summarizeConflict(item) {
   return {
-    start: new Date(windowStart.toInstant().epochMilliseconds),
-    end: new Date(windowEnd.toInstant().epochMilliseconds),
+    id: item.id,
+    title: item.title,
+    start: item.startAt,
+    end: item.endAt,
   };
 }
 
@@ -120,11 +133,12 @@ router.post('/schedule-proposal', requireAuth, async (req, res, next) => {
       }
 
       const conflicts = findConflicts(existingItems, item.proposal);
+      const freeSlots = suggestFreeSlots(existingItems, item.proposal, conflicts);
 
       return {
         ...item,
-        conflicts,
-        freeSlots: suggestFreeSlots(existingItems, item.proposal, conflicts),
+        conflicts: conflicts.map(summarizeConflict),
+        freeSlots,
       };
     });
 

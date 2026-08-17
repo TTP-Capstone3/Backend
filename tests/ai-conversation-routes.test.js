@@ -275,6 +275,58 @@ test('uses the current user recent messages for an AI proposal', async () => {
   );
 });
 
+test('summarizes conflicts and never suggests a slot that already passed', async () => {
+  User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
+  AiConversation.findOne = async () => null;
+  createScheduleProposal = async () => ({
+    reply: 'Here is your proposal.',
+    items: [
+      {
+        kind: 'proposal',
+        proposal: {
+          itemType: 'event',
+          title: 'Team sync',
+          startAt: '2026-08-17T18:00:00.000Z',
+          endAt: '2026-08-17T18:30:00.000Z',
+          timeZone: 'UTC',
+        },
+      },
+    ],
+  });
+  ScheduleItem.findAll = async () => [
+    {
+      id: 'existing-1',
+      title: 'Dentist',
+      description: 'Cleaning',
+      status: 'active',
+      startAt: '2026-08-17T18:00:00.000Z',
+      endAt: '2026-08-17T18:30:00.000Z',
+    },
+  ];
+
+  const response = await fetch(`${baseUrl}/ai/schedule-proposal`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ message: 'Add a team sync at 6pm', timeZone: 'UTC' }),
+  });
+  const body = await response.json();
+  const [item] = body.items;
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(item.conflicts, [
+    {
+      id: 'existing-1',
+      title: 'Dentist',
+      start: '2026-08-17T18:00:00.000Z',
+      end: '2026-08-17T18:30:00.000Z',
+    },
+  ]);
+
+  for (const slot of item.freeSlots) {
+    assert.ok(new Date(slot.start).getTime() >= Date.now() - 1000);
+  }
+});
+
 test('updates proposal items in the current user AI message', async () => {
   let messageQuery;
   let messageUpdate;
