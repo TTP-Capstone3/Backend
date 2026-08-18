@@ -161,6 +161,27 @@ test('reports when Gemini is not configured', async () => {
   assert.match(body.error, /not configured/);
 });
 
+test('reports when the AI usage limit is reached', async () => {
+  User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
+  ScheduleItem.findAll = async () => [];
+  createDailyBriefing = async () => {
+    const error = new Error('429 You exceeded your current quota.');
+    error.status = 429;
+    throw error;
+  };
+
+  const response = await fetch(`${baseUrl}/ai/daily-briefing`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ timeZone: 'America/New_York' }),
+  });
+
+  assert.equal(response.status, 429);
+
+  const body = await response.json();
+  assert.match(body.error, /usage limit/);
+});
+
 test('hides provider errors behind a generic message', async () => {
   User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
   ScheduleItem.findAll = async () => [];
