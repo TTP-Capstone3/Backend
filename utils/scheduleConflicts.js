@@ -1,3 +1,9 @@
+// Completed/cancelled/archived items are done or gone, so they shouldn't block time.
+// Items with no status field at all (older mocks/callers) are treated as active.
+function isActiveItem(item) {
+  return item.status === undefined || item.status === 'active';
+}
+
 function findConflicts(items, candidate, excludeId) {
   if (!candidate.startAt || !candidate.endAt) return [];
 
@@ -6,6 +12,7 @@ function findConflicts(items, candidate, excludeId) {
 
   return items.filter((item) => {
     if (excludeId && item.id === excludeId) return false;
+    if (!isActiveItem(item)) return false;
     if (!item.startAt || !item.endAt) return false;
 
     const itemStart = new Date(item.startAt);
@@ -21,7 +28,7 @@ function findFreeSlots(items, rangeStart, rangeEnd, durationMinutes) {
   const durationMs = durationMinutes * 60 * 1000;
 
   const busy = items
-    .filter((item) => item.startAt && item.endAt)
+    .filter((item) => isActiveItem(item) && item.startAt && item.endAt)
     .map((item) => ({ start: new Date(item.startAt), end: new Date(item.endAt) }))
     .filter((item) => item.end > start && item.start < end)
     .sort((a, b) => a.start - b.start);
