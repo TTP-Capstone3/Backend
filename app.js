@@ -19,6 +19,7 @@ const {
   categoryRouter,
   calendarRouter,
   aiRouter,
+  aiPlanningRouter,
 } = require('./routes'); // our routers
 const { requireAuth } = require('./middleware/auth'); // accepts our JWT or Auth0's
 
@@ -103,6 +104,9 @@ app.use('/schedule-items', scheduleItemRouter);
 app.use('/categories', categoryRouter);
 app.use('/calendar', calendarRouter);
 app.use('/ai', aiRouter);
+// Second router on /ai so the daily briefing lives in its own file. Express
+// falls through to it when the first router has no matching path.
+app.use('/ai', aiPlanningRouter);
 
 // ---------- 404 ----------
 // Nothing above matched, so the thing doesn't exist. Send a clear JSON 404.
