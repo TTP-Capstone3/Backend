@@ -6,6 +6,7 @@ const scheduleItemRouter = require('./scheduleItem-routes');
 const categoryRouter = require('./category-routes');
 const calendarRouter = require('./calendar-routes');
 const aiRouter = require('./ai-routes');
+const aiPlanningRouter = require('./ai-planning-routes');
 
 module.exports = {
   authRouter,
@@ -13,4 +14,5 @@ module.exports = {
   categoryRouter,
   calendarRouter,
   aiRouter,
+  aiPlanningRouter,
 };
