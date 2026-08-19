@@ -11,7 +11,6 @@ const {
 const {
   createScheduleProposal,
 } = require('../services/ai/schedule-proposal-service');
-const { createSpeech } = require('../services/ai/speech-service');
 const { findConflicts, findFreeSlots } = require('../utils/scheduleConflicts');
 
 const router = express.Router();
@@ -164,35 +163,6 @@ router.post('/schedule-proposal', requireAuth, async (req, res, next) => {
 
     return res.status(502).json({
       error: 'The AI service could not create a schedule proposal.',
-    });
-  }
-});
-
-// Turns text into spoken audio. Does not save anything.
-router.post('/speak', requireAuth, async (req, res, next) => {
-  try {
-    const speech = await createSpeech(req.body?.text);
-    res.status(200).json(speech);
-  } catch (error) {
-    if (error.code === 'AI_INVALID_INPUT') {
-      return res.status(400).json({ error: error.message });
-    }
-
-    // Gemini rejects the request once the plan's request limit is used up.
-    if (error.status === 429) {
-      return res.status(429).json({
-        error: 'The AI has hit its usage limit. Please try again in a little while.',
-      });
-    }
-
-    if (error.code === 'GEMINI_NOT_CONFIGURED') {
-      return res.status(503).json({
-        error: 'The AI service is not configured yet.',
-      });
-    }
-
-    return res.status(502).json({
-      error: 'The AI service could not generate speech.',
     });
   }
 });
