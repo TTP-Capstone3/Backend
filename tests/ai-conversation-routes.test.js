@@ -275,6 +275,31 @@ test('uses the current user recent messages for an AI proposal', async () => {
   );
 });
 
+test('reports when the AI usage limit is reached', async () => {
+  User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
+  AiConversation.findOne = async () => null;
+  ScheduleItem.findAll = async () => [];
+  createScheduleProposal = async () => {
+    const error = new Error('429 You exceeded your current quota.');
+    error.status = 429;
+    throw error;
+  };
+
+  const response = await fetch(`${baseUrl}/ai/schedule-proposal`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      message: 'Add gym tomorrow at 6 PM',
+      timeZone: 'America/New_York',
+    }),
+  });
+
+  assert.equal(response.status, 429);
+
+  const body = await response.json();
+  assert.match(body.error, /usage limit/);
+});
+
 test('summarizes conflicts and never suggests a slot that already passed', async () => {
   User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
   AiConversation.findOne = async () => null;

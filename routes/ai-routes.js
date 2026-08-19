@@ -149,6 +149,13 @@ router.post('/schedule-proposal', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: error.message });
     }
 
+    // Gemini rejects the request once the plan's request limit is used up.
+    if (error.status === 429) {
+      return res.status(429).json({
+        error: 'The AI has hit its usage limit. Please try again in a little while.',
+      });
+    }
+
     if (error.code === 'GEMINI_NOT_CONFIGURED') {
       return res.status(503).json({
         error: 'The AI service is not configured yet.',
@@ -169,6 +176,13 @@ router.post('/speak', requireAuth, async (req, res, next) => {
   } catch (error) {
     if (error.code === 'AI_INVALID_INPUT') {
       return res.status(400).json({ error: error.message });
+    }
+
+    // Gemini rejects the request once the plan's request limit is used up.
+    if (error.status === 429) {
+      return res.status(429).json({
+        error: 'The AI has hit its usage limit. Please try again in a little while.',
+      });
     }
 
     if (error.code === 'GEMINI_NOT_CONFIGURED') {
