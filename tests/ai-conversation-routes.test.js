@@ -9,7 +9,7 @@ process.env.JWT_SECRET ||= 'test-only-jwt-secret';
 process.env.AUTH0_DOMAIN ||= 'example.auth0.com';
 process.env.AUTH0_AUDIENCE ||= 'https://example.test/api';
 
-const { User, AiConversation, AiMessage } = require('../models');
+const { User, AiConversation, AiMessage, ScheduleItem } = require('../models');
 const { signToken } = require('../middleware/auth');
 const scheduleProposalService = require('../services/ai/schedule-proposal-service');
 
@@ -29,6 +29,7 @@ const originalMethods = {
   findMessage: AiMessage.findOne,
   findMessages: AiMessage.findAll,
   createMessage: AiMessage.create,
+  findScheduleItems: ScheduleItem.findAll,
 };
 
 let server;
@@ -54,6 +55,7 @@ test.after(async () => {
   AiMessage.findOne = originalMethods.findMessage;
   AiMessage.findAll = originalMethods.findMessages;
   AiMessage.create = originalMethods.createMessage;
+  ScheduleItem.findAll = originalMethods.findScheduleItems;
   scheduleProposalService.createScheduleProposal =
     originalCreateScheduleProposal;
 
@@ -244,6 +246,7 @@ test('uses the current user recent messages for an AI proposal', async () => {
     proposalRequest = { message, options };
     return { reply: 'I created a proposal.', items: [] };
   };
+  ScheduleItem.findAll = async () => [];
 
   const response = await fetch(`${baseUrl}/ai/schedule-proposal`, {
     method: 'POST',
@@ -270,6 +273,58 @@ test('uses the current user recent messages for an AI proposal', async () => {
       'Assistant: What time is soccer practice?',
     ].join('\n'),
   );
+});
+
+test('summarizes conflicts and never suggests a slot that already passed', async () => {
+  User.findByPk = async () => ({ id: 'user-1', username: 'Angel' });
+  AiConversation.findOne = async () => null;
+  createScheduleProposal = async () => ({
+    reply: 'Here is your proposal.',
+    items: [
+      {
+        kind: 'proposal',
+        proposal: {
+          itemType: 'event',
+          title: 'Team sync',
+          startAt: '2026-08-17T18:00:00.000Z',
+          endAt: '2026-08-17T18:30:00.000Z',
+          timeZone: 'UTC',
+        },
+      },
+    ],
+  });
+  ScheduleItem.findAll = async () => [
+    {
+      id: 'existing-1',
+      title: 'Dentist',
+      description: 'Cleaning',
+      status: 'active',
+      startAt: '2026-08-17T18:00:00.000Z',
+      endAt: '2026-08-17T18:30:00.000Z',
+    },
+  ];
+
+  const response = await fetch(`${baseUrl}/ai/schedule-proposal`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ message: 'Add a team sync at 6pm', timeZone: 'UTC' }),
+  });
+  const body = await response.json();
+  const [item] = body.items;
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(item.conflicts, [
+    {
+      id: 'existing-1',
+      title: 'Dentist',
+      start: '2026-08-17T18:00:00.000Z',
+      end: '2026-08-17T18:30:00.000Z',
+    },
+  ]);
+
+  for (const slot of item.freeSlots) {
+    assert.ok(new Date(slot.start).getTime() >= Date.now() - 1000);
+  }
 });
 
 test('updates proposal items in the current user AI message', async () => {
