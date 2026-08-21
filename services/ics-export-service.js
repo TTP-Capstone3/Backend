@@ -164,6 +164,115 @@ function createEventLines(scheduleItem, generatedAt) {
   return lines;
 }
 
+function createTodoLines(scheduleItem, generatedAt) {
+  if (!scheduleItem || scheduleItem.itemType !== 'task') {
+    throw new Error('ICS export currently supports task schedule items only.');
+  }
+
+  const title = scheduleItem.title?.trim() || 'Untitled task';
+  const lines = [
+    'BEGIN:VTODO',
+    `UID:${escapeCalendarText(getEventUid(scheduleItem))}`,
+    `DTSTAMP:${formatUtcDateTime(generatedAt, 'generatedAt')}`,
+    `SUMMARY:${escapeCalendarText(title)}`,
+  ];
+
+  if (scheduleItem.dueAt) {
+    lines.push(`DUE:${formatUtcDateTime(scheduleItem.dueAt, 'dueAt')}`);
+  }
+
+  if (scheduleItem.description?.trim()) {
+    lines.push(`DESCRIPTION:${escapeCalendarText(scheduleItem.description.trim())}`);
+  }
+
+  if (scheduleItem.location?.trim()) {
+    lines.push(`LOCATION:${escapeCalendarText(scheduleItem.location.trim())}`);
+  }
+
+  lines.push(`STATUS:${scheduleItem.status === 'completed' ? 'COMPLETED' : 'NEEDS-ACTION'}`);
+  lines.push('END:VTODO');
+  return lines;
+}
+
+// Notes don't need any scheduling fields, so VJOURNAL only ever gets a
+// summary and description.
+function createJournalLines(scheduleItem, generatedAt) {
+  if (!scheduleItem || scheduleItem.itemType !== 'note') {
+    throw new Error('ICS export currently supports note schedule items only.');
+  }
+
+  const title = scheduleItem.title?.trim() || 'Untitled note';
+  const lines = [
+    'BEGIN:VJOURNAL',
+    `UID:${escapeCalendarText(getEventUid(scheduleItem))}`,
+    `DTSTAMP:${formatUtcDateTime(generatedAt, 'generatedAt')}`,
+    `SUMMARY:${escapeCalendarText(title)}`,
+  ];
+
+  if (scheduleItem.description?.trim()) {
+    lines.push(`DESCRIPTION:${escapeCalendarText(scheduleItem.description.trim())}`);
+  }
+
+  lines.push('END:VJOURNAL');
+  return lines;
+}
+
+// ICS has no standalone "reminder" component - VALARM only exists nested
+// inside a VEVENT or VTODO. A zero-length VEVENT at the reminder time is the
+// closest standard equivalent, tagged with a custom X-property so our own
+// importer can bring it back in as a reminder instead of a plain event.
+function createReminderLines(scheduleItem, generatedAt) {
+  if (!scheduleItem || scheduleItem.itemType !== 'reminder') {
+    throw new Error('ICS export currently supports reminder schedule items only.');
+  }
+
+  if (!scheduleItem.reminderAt) {
+    throw new Error('An exported reminder needs a reminderAt date.');
+  }
+
+  const title = scheduleItem.title?.trim() || 'Untitled reminder';
+  const lines = [
+    'BEGIN:VEVENT',
+    `UID:${escapeCalendarText(getEventUid(scheduleItem))}`,
+    `DTSTAMP:${formatUtcDateTime(generatedAt, 'generatedAt')}`,
+    `DTSTART:${formatUtcDateTime(scheduleItem.reminderAt, 'reminderAt')}`,
+    `DTEND:${formatUtcDateTime(scheduleItem.reminderAt, 'reminderAt')}`,
+    `SUMMARY:${escapeCalendarText(title)}`,
+  ];
+
+  if (scheduleItem.description?.trim()) {
+    lines.push(`DESCRIPTION:${escapeCalendarText(scheduleItem.description.trim())}`);
+  }
+
+  // Custom X-property so our own importer can tell this apart from a real
+  // event and bring it back in as a reminder instead. Other calendar apps
+  // are required by the ICS spec to just ignore properties they don't know.
+  lines.push('X-TASKLY-ITEM-TYPE:reminder');
+  lines.push('END:VEVENT');
+  return lines;
+}
+
+// Routes each schedule item to the line builder for its itemType.
+function createComponentLines(scheduleItem, generatedAt) {
+  if (scheduleItem?.itemType === 'event') {
+    return createEventLines(scheduleItem, generatedAt);
+  }
+
+  if (scheduleItem?.itemType === 'task') {
+    return createTodoLines(scheduleItem, generatedAt);
+  }
+
+  if (scheduleItem?.itemType === 'note') {
+    return createJournalLines(scheduleItem, generatedAt);
+  }
+
+  if (scheduleItem?.itemType === 'reminder') {
+    return createReminderLines(scheduleItem, generatedAt);
+  }
+
+  throw new Error(`Cannot export a schedule item with itemType "${scheduleItem?.itemType}".`);
+}
+
 function normalizeRecurrenceRule(value) {
   if (value === null || value === undefined || value === '') {
     return null;
@@ -232,7 +341,7 @@ function createIcsCalendar(scheduleItems, generatedAt = new Date()) {
   ];
 
   for (const scheduleItem of scheduleItems) {
-    contentLines.push(...createEventLines(scheduleItem, generatedAt));
+    contentLines.push(...createComponentLines(scheduleItem, generatedAt));
   }
 
   contentLines.push('END:VCALENDAR');
