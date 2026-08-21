@@ -80,8 +80,54 @@ function convertCalendarEvent(calendarEvent) {
   };
 }
 
-// Parse calendar text and return only events. Other ICS entries, such as
-// timezone definitions and tasks, are not part of the first version.
+// VTODO status values don't line up 1:1 with ours - CANCELLED maps to
+// archived since scheduleItem creation doesn't accept a "cancelled" status.
+function mapTodoStatus(calendarStatus) {
+  if (calendarStatus === 'COMPLETED') {
+    return 'completed';
+  }
+
+  if (calendarStatus === 'CANCELLED') {
+    return 'archived';
+  }
+
+  return 'active';
+}
+
+// Convert one VTODO from node-ical into the field names used by ScheduleItem.
+function convertCalendarTodo(calendarTodo) {
+  const timeZone = calendarTodo.start?.tz || calendarTodo.due?.tz || DEFAULT_TIME_ZONE;
+
+  return {
+    title: getText(calendarTodo.summary) || 'Untitled task',
+    description: getText(calendarTodo.description),
+    itemType: 'task',
+    startAt: normalizeCalendarDate(calendarTodo.start, timeZone),
+    dueAt: normalizeCalendarDate(calendarTodo.due, timeZone),
+    allDay: Boolean(calendarTodo.start?.dateOnly || calendarTodo.due?.dateOnly),
+    timeZone,
+    location: getText(calendarTodo.location),
+    status: mapTodoStatus(calendarTodo.status),
+    source: 'ics-import',
+    externalUid: getText(calendarTodo.uid),
+  };
+}
+
+// Convert one VJOURNAL from node-ical into the field names used by
+// ScheduleItem. Notes don't need any scheduling fields.
+function convertCalendarJournal(calendarJournal) {
+  return {
+    title: getText(calendarJournal.summary) || 'Untitled note',
+    description: getText(calendarJournal.description),
+    itemType: 'note',
+    source: 'ics-import',
+    externalUid: getText(calendarJournal.uid),
+  };
+}
+
+// Parses calendar text into schedule items. VEVENT becomes an event, VTODO
+// becomes a task, and VJOURNAL becomes a note. Anything else (timezone
+// definitions, free/busy blocks, etc.) is ignored.
 async function parseCalendarEvents(calendarText) {
   if (typeof calendarText !== 'string' || !calendarText.trim()) {
     throw new Error('Calendar text is required.');
@@ -90,8 +136,22 @@ async function parseCalendarEvents(calendarText) {
   const parsedCalendar = await ical.async.parseICS(calendarText);
 
   return Object.values(parsedCalendar)
-    .filter((calendarEntry) => calendarEntry.type === 'VEVENT')
-    .map(convertCalendarEvent);
+    .map((calendarEntry) => {
+      if (calendarEntry.type === 'VEVENT') {
+        return convertCalendarEvent(calendarEntry);
+      }
+
+      if (calendarEntry.type === 'VTODO') {
+        return convertCalendarTodo(calendarEntry);
+      }
+
+      if (calendarEntry.type === 'VJOURNAL') {
+        return convertCalendarJournal(calendarEntry);
+      }
+
+      return null;
+    })
+    .filter(Boolean);
 }
 
 module.exports = {

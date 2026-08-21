@@ -11,7 +11,8 @@ const router = express.Router();
 router.use(requireAuth);
 
 // POST /calendar/import
-// This route reads ICS calendar text and saves its events as schedule items.
+// This route reads ICS calendar text and saves its events, tasks, and notes
+// as schedule items.
 router.post(
   '/import',
   express.text({ type: 'text/calendar', limit: '1mb' }),
@@ -68,13 +69,12 @@ router.post(
 );
 
 // GET /calendar/export
-// Return the current user's events as a downloadable ICS calendar.
+// Return the current user's schedule items as a downloadable ICS calendar.
 router.get('/export', async (req, res, next) => {
   try {
-    const events = await ScheduleItem.findAll({
+    const scheduleItems = await ScheduleItem.findAll({
       where: {
         userId: req.user.id,
-        itemType: 'event',
       },
       order: [
         ['startAt', 'ASC'],
@@ -82,7 +82,7 @@ router.get('/export', async (req, res, next) => {
       ],
     });
 
-    const calendarText = createIcsCalendar(events);
+    const calendarText = createIcsCalendar(scheduleItems);
 
     res
       .status(200)

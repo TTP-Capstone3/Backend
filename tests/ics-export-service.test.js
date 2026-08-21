@@ -111,22 +111,106 @@ test('creates event text that the existing importer can parse again', async () =
   assert.equal(importedEvents[0].endAt.toISOString(), '2026-08-11T15:00:00.000Z');
 });
 
-test('rejects non-event schedule items instead of silently dropping them', () => {
+test('rejects an unsupported itemType instead of silently dropping it', () => {
   assert.throws(
     () =>
       createIcsCalendar(
         [
           {
             id: 45,
-            itemType: 'task',
-            title: 'Finish export route',
-            dueAt: new Date('2026-08-12T21:00:00.000Z'),
+            itemType: 'not-a-real-type',
+            title: 'Mystery item',
           },
         ],
         GENERATED_AT,
       ),
-    { message: 'ICS export currently supports event schedule items only.' },
+    { message: 'Cannot export a schedule item with itemType "not-a-real-type".' },
   );
+});
+
+test('exports a task as a VTODO that the importer reads back as a task', async () => {
+  const calendarText = createIcsCalendar(
+    [
+      {
+        id: 60,
+        itemType: 'task',
+        title: 'Finish export route',
+        description: 'Add VTODO support',
+        dueAt: new Date('2026-08-12T21:00:00.000Z'),
+        status: 'active',
+      },
+    ],
+    GENERATED_AT,
+  );
+
+  assert.match(calendarText, /BEGIN:VTODO\r\n/);
+  assert.match(calendarText, /SUMMARY:Finish export route\r\n/);
+  assert.match(calendarText, /DUE:20260812T210000Z\r\n/);
+  assert.match(calendarText, /STATUS:NEEDS-ACTION\r\n/);
+  assert.match(calendarText, /END:VTODO\r\n/);
+
+  const importedItems = await parseCalendarEvents(calendarText);
+  assert.equal(importedItems.length, 1);
+  assert.equal(importedItems[0].itemType, 'task');
+  assert.equal(importedItems[0].title, 'Finish export route');
+  assert.equal(importedItems[0].dueAt.toISOString(), '2026-08-12T21:00:00.000Z');
+});
+
+test('exports a completed task with a COMPLETED status', () => {
+  const calendarText = createIcsCalendar(
+    [
+      {
+        id: 61,
+        itemType: 'task',
+        title: 'Already done',
+        status: 'completed',
+      },
+    ],
+    GENERATED_AT,
+  );
+
+  assert.match(calendarText, /STATUS:COMPLETED\r\n/);
+});
+
+test('exports a note as a VJOURNAL that the importer reads back as a note', async () => {
+  const calendarText = createIcsCalendar(
+    [
+      {
+        id: 62,
+        itemType: 'note',
+        title: 'Idea',
+        description: 'Try adding note support to ICS export',
+      },
+    ],
+    GENERATED_AT,
+  );
+
+  assert.match(calendarText, /BEGIN:VJOURNAL\r\n/);
+  assert.match(calendarText, /SUMMARY:Idea\r\n/);
+  assert.match(calendarText, /END:VJOURNAL\r\n/);
+
+  const importedItems = await parseCalendarEvents(calendarText);
+  assert.equal(importedItems.length, 1);
+  assert.equal(importedItems[0].itemType, 'note');
+  assert.equal(importedItems[0].title, 'Idea');
+});
+
+test('exports a reminder as a zero-length VEVENT', () => {
+  const calendarText = createIcsCalendar(
+    [
+      {
+        id: 63,
+        itemType: 'reminder',
+        title: 'Call the vet',
+        reminderAt: new Date('2026-08-13T15:00:00.000Z'),
+      },
+    ],
+    GENERATED_AT,
+  );
+
+  assert.match(calendarText, /BEGIN:VEVENT\r\n/);
+  assert.match(calendarText, /DTSTART:20260813T150000Z\r\n/);
+  assert.match(calendarText, /DTEND:20260813T150000Z\r\n/);
 });
 
 test('exports a recurring event with its RRULE', () => {
