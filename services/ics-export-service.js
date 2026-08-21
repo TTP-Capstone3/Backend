@@ -219,9 +219,8 @@ function createJournalLines(scheduleItem, generatedAt) {
 
 // ICS has no standalone "reminder" component - VALARM only exists nested
 // inside a VEVENT or VTODO. A zero-length VEVENT at the reminder time is the
-// closest standard equivalent, so that's what a reminder exports as. This
-// does mean a reminder comes back in as a plain event if it's ever
-// re-imported - an inherent limitation of the ICS format, not a bug here.
+// closest standard equivalent, tagged with a custom X-property so our own
+// importer can bring it back in as a reminder instead of a plain event.
 function createReminderLines(scheduleItem, generatedAt) {
   if (!scheduleItem || scheduleItem.itemType !== 'reminder') {
     throw new Error('ICS export currently supports reminder schedule items only.');
@@ -245,6 +244,10 @@ function createReminderLines(scheduleItem, generatedAt) {
     lines.push(`DESCRIPTION:${escapeCalendarText(scheduleItem.description.trim())}`);
   }
 
+  // Custom X-property so our own importer can tell this apart from a real
+  // event and bring it back in as a reminder instead. Other calendar apps
+  // are required by the ICS spec to just ignore properties they don't know.
+  lines.push('X-TASKLY-ITEM-TYPE:reminder');
   lines.push('END:VEVENT');
   return lines;
 }

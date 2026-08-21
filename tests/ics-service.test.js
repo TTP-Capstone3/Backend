@@ -166,6 +166,46 @@ test('converts an ICS VJOURNAL into a note', async () => {
   assert.equal(items[0].description, 'Try adding note support');
 });
 
+test('a VEVENT tagged X-TASKLY-ITEM-TYPE:reminder imports as a reminder', async () => {
+  const calendarText = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'BEGIN:VEVENT',
+    'UID:call-vet@example.com',
+    'SUMMARY:Call the vet',
+    'DTSTART:20260813T150000Z',
+    'DTEND:20260813T150000Z',
+    'X-TASKLY-ITEM-TYPE:reminder',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\n');
+
+  const items = await parseCalendarEvents(calendarText);
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].itemType, 'reminder');
+  assert.equal(items[0].title, 'Call the vet');
+  assert.equal(items[0].reminderAt.toISOString(), '2026-08-13T15:00:00.000Z');
+});
+
+test('a plain VEVENT without the custom property still imports as an event', async () => {
+  const calendarText = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'BEGIN:VEVENT',
+    'UID:plain-event@example.com',
+    'SUMMARY:Plain event',
+    'DTSTART:20260813T150000Z',
+    'DTEND:20260813T160000Z',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\n');
+
+  const items = await parseCalendarEvents(calendarText);
+
+  assert.equal(items[0].itemType, 'event');
+});
+
 test('preserves an imported recurrence rule', async () => {
   const calendarText = [
     'BEGIN:VCALENDAR',

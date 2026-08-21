@@ -211,6 +211,28 @@ test('exports a reminder as a zero-length VEVENT', () => {
   assert.match(calendarText, /BEGIN:VEVENT\r\n/);
   assert.match(calendarText, /DTSTART:20260813T150000Z\r\n/);
   assert.match(calendarText, /DTEND:20260813T150000Z\r\n/);
+  assert.match(calendarText, /X-TASKLY-ITEM-TYPE:reminder\r\n/);
+});
+
+test('a reminder comes back in as a reminder, not an event, when re-imported', async () => {
+  const calendarText = createIcsCalendar(
+    [
+      {
+        id: 64,
+        itemType: 'reminder',
+        title: 'Call the vet',
+        reminderAt: new Date('2026-08-13T15:00:00.000Z'),
+      },
+    ],
+    GENERATED_AT,
+  );
+
+  const importedItems = await parseCalendarEvents(calendarText);
+
+  assert.equal(importedItems.length, 1);
+  assert.equal(importedItems[0].itemType, 'reminder');
+  assert.equal(importedItems[0].title, 'Call the vet');
+  assert.equal(importedItems[0].reminderAt.toISOString(), '2026-08-13T15:00:00.000Z');
 });
 
 test('exports a recurring event with its RRULE', () => {

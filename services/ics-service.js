@@ -80,6 +80,23 @@ function convertCalendarEvent(calendarEvent) {
   };
 }
 
+// Our own export tags a reminder's zero-length VEVENT with this custom
+// property (ICS has no standalone reminder component), so it comes back in
+// as a reminder here instead of a plain event.
+function convertCalendarReminder(calendarEvent) {
+  const timeZone = calendarEvent.start?.tz || DEFAULT_TIME_ZONE;
+
+  return {
+    title: getText(calendarEvent.summary) || 'Untitled reminder',
+    description: getText(calendarEvent.description),
+    itemType: 'reminder',
+    reminderAt: normalizeCalendarDate(calendarEvent.start, timeZone),
+    timeZone,
+    source: 'ics-import',
+    externalUid: getText(calendarEvent.uid),
+  };
+}
+
 // VTODO status values don't line up 1:1 with ours - CANCELLED maps to
 // archived since scheduleItem creation doesn't accept a "cancelled" status.
 function mapTodoStatus(calendarStatus) {
@@ -125,8 +142,9 @@ function convertCalendarJournal(calendarJournal) {
   };
 }
 
-// Parses calendar text into schedule items. VEVENT becomes an event, VTODO
-// becomes a task, and VJOURNAL becomes a note. Anything else (timezone
+// Parses calendar text into schedule items. VEVENT becomes an event (or a
+// reminder if it carries our own X-TASKLY-ITEM-TYPE:reminder property),
+// VTODO becomes a task, and VJOURNAL becomes a note. Anything else (timezone
 // definitions, free/busy blocks, etc.) is ignored.
 async function parseCalendarEvents(calendarText) {
   if (typeof calendarText !== 'string' || !calendarText.trim()) {
@@ -138,7 +156,9 @@ async function parseCalendarEvents(calendarText) {
   return Object.values(parsedCalendar)
     .map((calendarEntry) => {
       if (calendarEntry.type === 'VEVENT') {
-        return convertCalendarEvent(calendarEntry);
+        return calendarEntry['TASKLY-ITEM-TYPE'] === 'reminder'
+          ? convertCalendarReminder(calendarEntry)
+          : convertCalendarEvent(calendarEntry);
       }
 
       if (calendarEntry.type === 'VTODO') {
